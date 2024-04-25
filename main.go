@@ -46,23 +46,6 @@ func AmazonScraper() {
 	}
 	defer res.Body.Close()
 
-	maxRetries := 50
-	retryCount := 0
-
-	for retryCount < maxRetries && res.StatusCode == 503 {
-		fmt.Println("Tentativa de requisição", retryCount+1)
-		retryCount++
-		time.Sleep(5 * time.Second) // Aguarda 5 segundos antes de executar novamente a requisição
-		res, err = client.Do(req)   // Faz uma nova requisição
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	if retryCount == maxRetries {
-		log.Fatalf("Não foi possível fazer a requisição após %d tentativas", maxRetries)
-	}
-
 	// Cria um novo arquivo .xslx
 	f := excelize.NewFile()
 	index, err := f.NewSheet("Produtos")
@@ -82,21 +65,13 @@ func AmazonScraper() {
 	// Linha para começar a gravar os dados
 	row := 2
 
-	//CARREGA O HTML UTILIZANDO O PACKAGE GOQUERY
+	// Carrega o HTML utilizando o pacote GoQuery
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Cria um arquivo .txt para salvar os produtos
-	// file, err := os.Create("produtos.txt")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer file.Close()
-	// date := time.Now()
-	// fmt.Fprintf(file, "Data e Hora da Extração: %s\n\n\n", date.Format(time.UnixDate))
-
+	// Busca em loop do título, preço, link e imagem do produto no documento HTML
 	doc.Find(".s-result-item").Each(func(i int, s *goquery.Selection) {
 		title := s.Find("h2").Text()
 		imgSrc, _ := s.Find(".s-image").Attr("src")
@@ -109,10 +84,11 @@ func AmazonScraper() {
 
 		if title != "" && fullPrice != "" && link != "" {
 
-			fmt.Printf("Produto: %s --- Preço: %s\n", title, fullPrice)
+			fmt.Printf("Produto: %s - Preço: %s\n", title, fullPrice)
 
 			link := "https://amazon.com.br" + link
 
+			// Grava os produtos encontrados na tabela
 			f.SetCellValue("Produtos", fmt.Sprintf("A%d", row), title)
 			f.SetCellValue("Produtos", fmt.Sprintf("B%d", row), fullPrice)
 			f.SetCellValue("Produtos", fmt.Sprintf("C%d", row), imgSrc)
@@ -123,6 +99,7 @@ func AmazonScraper() {
 		}
 	})
 
+	// Salva o arquivo xlsx com o nome "ProdutosAmazon"
 	if err := f.SaveAs("ProdutosAmazon.xlsx"); err != nil {
 		fmt.Println(err)
 	}
